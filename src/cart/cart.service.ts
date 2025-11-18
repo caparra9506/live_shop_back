@@ -1,6 +1,6 @@
 import { Injectable, HttpException, HttpStatus, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, LessThan } from 'typeorm';
+import { Repository, LessThan, In } from 'typeorm';
 import { Cart, CartStatus } from '../entity/cart.entity';
 import { CartItem } from '../entity/cart-item.entity';
 import { Product } from '../entity/product.entity';
@@ -336,7 +336,7 @@ export class CartService {
       where: {
         tiktokUser: { id: userTikTokId },
         store: { id: store.id },
-        status: CartStatus.ACTIVE
+        status: In([CartStatus.ACTIVE, CartStatus.EXPIRED])
       },
       relations: [
         'cartItems',
