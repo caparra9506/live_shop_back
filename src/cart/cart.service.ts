@@ -1,6 +1,6 @@
 import { Injectable, HttpException, HttpStatus, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, LessThan } from 'typeorm';
+import { Repository, LessThan, In } from 'typeorm';
 import { Cart, CartStatus } from '../entity/cart.entity';
 import { CartItem } from '../entity/cart-item.entity';
 import { Product } from '../entity/product.entity';
@@ -112,16 +112,24 @@ export class CartService {
     // Buscar carrito
     const cart = await this.cartRepository.findOne({
       where: { id: cartId },
-      relations: ['cartItems']
+      relations: ['cartItems', 'cartItems.product', 'cartItems.productVariant']
     });
 
-    if (!cart || cart.status !== CartStatus.ACTIVE) {
-      throw new HttpException('Carrito no válido o inactivo', HttpStatus.BAD_REQUEST);
+    if (!cart) {
+      throw new HttpException('Carrito no encontrado', HttpStatus.NOT_FOUND);
     }
 
-    // Verificar si el carrito ha expirado
-    if (new Date() > cart.expiresAt) {
-      throw new HttpException('El carrito ha expirado', HttpStatus.BAD_REQUEST);
+    if (cart.status !== CartStatus.ACTIVE && cart.status !== CartStatus.EXPIRED) {
+      throw new HttpException('Carrito no válido o ya procesado', HttpStatus.BAD_REQUEST);
+    }
+
+    // Si el carrito ha expirado pero está siendo usado, reactivarlo
+    if (cart.status === CartStatus.EXPIRED || new Date() > cart.expiresAt) {
+      this.logger.log(`Reactivando carrito expirado ${cart.id}`);
+      cart.status = CartStatus.ACTIVE;
+      // Extender tiempo por 48 horas más
+      cart.expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000);
+      await this.cartRepository.save(cart);
     }
 
     // Buscar producto
@@ -319,19 +327,24 @@ export class CartService {
   }
 
   async getUserActiveCart(userTikTokId: number, storeName: string): Promise<Cart | null> {
+    this.logger.log(`🔍 getUserActiveCart - userTikTokId: ${userTikTokId}, storeName: ${storeName}`);
+
     const store = await this.storeRepository.findOne({
       where: { name: storeName }
     });
 
     if (!store) {
+      this.logger.warn(`⚠️ Store not found: ${storeName}`);
       return null;
     }
 
-    return await this.cartRepository.findOne({
-      where: { 
+    this.logger.log(`✅ Store found: ${store.name} (ID: ${store.id})`);
+
+    const cart = await this.cartRepository.findOne({
+      where: {
         tiktokUser: { id: userTikTokId },
         store: { id: store.id },
-        status: CartStatus.ACTIVE 
+        status: In([CartStatus.ACTIVE, CartStatus.EXPIRED])
       },
       relations: [
         'cartItems',
@@ -343,6 +356,28 @@ export class CartService {
         'store'
       ]
     });
+
+    if (cart) {
+      this.logger.log(`✅ Cart found: ID ${cart.id}, Items: ${cart.cartItems?.length || 0}`);
+    } else {
+      this.logger.warn(`⚠️ No ACTIVE cart found for user ${userTikTokId} in store ${store.id}`);
+
+      // Debug: Buscar cualquier carrito del usuario en esa tienda
+      const anyCart = await this.cartRepository.findOne({
+        where: {
+          tiktokUser: { id: userTikTokId },
+          store: { id: store.id }
+        }
+      });
+
+      if (anyCart) {
+        this.logger.warn(`⚠️ Found cart with different status: ${anyCart.status} (ID: ${anyCart.id})`);
+      } else {
+        this.logger.warn(`⚠️ No cart exists for this user and store combination`);
+      }
+    }
+
+    return cart;
   }
 
   async extendCartExpiration(cartId: number, additionalDays: number): Promise<Cart> {
