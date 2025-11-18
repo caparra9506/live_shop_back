@@ -568,6 +568,7 @@ export class ProductService {
       .leftJoinAndSelect('product_variant.color', 'color')
       .leftJoinAndSelect('product_variant.size', 'size')
       .where('store.name = :nameStore', { nameStore })
+      .andWhere('product.inStock = :inStock', { inStock: true })  // ✅ Only show in-stock products
       .getMany();
   }
 

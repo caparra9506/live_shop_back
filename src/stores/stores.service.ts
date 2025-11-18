@@ -273,10 +273,13 @@ export class StoresService {
       for (const category of storeData.categories) {
         console.log(`🔍 Loading products for category: ${category.name} (ID: ${category.id})`);
         const products = await this.productRepository.find({
-          where: { category: { id: category.id } },
+          where: {
+            category: { id: category.id },
+            inStock: true  // ✅ Only show products that are in stock
+          },
           relations: ['variants', 'variants.color', 'variants.size']
         });
-        console.log(`✅ Found ${products.length} products for category ${category.name}`);
+        console.log(`✅ Found ${products.length} in-stock products for category ${category.name}`);
         // Agregar productos directamente al objeto de categoría
         (category as any).products = products;
       }
