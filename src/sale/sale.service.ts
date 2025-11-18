@@ -223,7 +223,7 @@ export class SalesService {
       );
     }
 
-    const sale = this.saleRepository.create({ store, totalAmount, shippingCost, discountAmount });
+    const sale = this.saleRepository.create({ store, totalAmount, shippingCost, discountAmount, cartId });
     const savedSale = await this.saleRepository.save(sale);
 
     let finalProduct: Product | null = null;
@@ -269,14 +269,8 @@ export class SalesService {
       });
     }
 
-    // Generar guía
-    const shipping = await this.generateShippingLabel(
-      savedSale,
-      tiktokUser,
-      finalProduct!,
-      transportadora,
-      store,
-    );
+    // Nota: La generación de guía se ha movido a payment.service.ts 
+    // para que se ejecute DESPUÉS de confirmar el pago con ePayco
 
     if (!tiktokUser.name) {
       throw new HttpException(
@@ -562,7 +556,7 @@ export class SalesService {
       store,
       tiktokUser,
       sale: savedSale,
-      shipping,
+      shipping: null, // Será generado después del pago
       reference: paymentReference,
       receiptNumber: receiptNumber,
       // 🏦 Datos adicionales de ePayco
@@ -595,12 +589,12 @@ export class SalesService {
       shippingCost,
       urlBanco: epaycoRes.data?.urlbanco,
       shipping: {
-        status: shipping.status,
-        trackingNumber: shipping.numberGuide,
-        carrier: shipping.carrier,
-        message: shipping.message,
-        hasError: shipping.status.includes('ERROR'),
-        pdfUrl: shipping.pdfUrl
+        status: 'PENDIENTE_PAGO',
+        trackingNumber: null,
+        carrier: null,
+        message: 'Guía se generará después de confirmar el pago',
+        hasError: false,
+        pdfUrl: null
       }
     };
 
@@ -609,16 +603,7 @@ export class SalesService {
     console.log('🔗 urlBanco a devolver:', epaycoRes.data?.urlbanco);
     console.log('🎯 === FIN RESPUESTA ===');
 
-    // Si la venta fue creada desde un carrito, marcarlo como COMPLETED
-    if (cartId) {
-      try {
-        await this.cartRepository.update(cartId, { status: CartStatus.COMPLETED });
-        console.log(`✅ Carrito ${cartId} marcado como COMPLETED`);
-      } catch (error) {
-        console.error(`⚠️ Error al marcar carrito ${cartId} como COMPLETED:`, error.message);
-        // No lanzamos error para no bloquear la venta
-      }
-    }
+    // Nota: El carrito se marcará como COMPLETED solo cuando el pago sea exitoso (en payment.service.ts)
 
     return response;
   }
@@ -1181,7 +1166,7 @@ export class SalesService {
       .leftJoinAndSelect('cart.tiktokUser', 'tiktokUser')
       .leftJoinAndSelect('tiktokUser.city', 'city')
       .where('owner.id = :userId', { userId })
-      .andWhere('cart.status IN (:...statuses)', { statuses: ['ACTIVE', 'CANCELLED'] });
+      .andWhere('cart.status != :completedStatus', { completedStatus: 'COMPLETED' });
 
     // Aplicar filtros de búsqueda
     if (filters?.search) {
@@ -1643,12 +1628,7 @@ export class SalesService {
     }
   }
 
-  async createSaleFromExpiredCart(cartId: number, bankCode: string, token: string) {
-    // Verificar token
-    if (!this.verifyCartToken(cartId, token)) {
-      throw new HttpException('Token inválido', HttpStatus.UNAUTHORIZED);
-    }
-
+  async createSaleFromExpiredCart(cartId: number, bankCode: string) {
     // Obtener carrito expirado
     const cart = await this.cartRepository.findOne({
       where: { id: cartId, status: CartStatus.EXPIRED },
@@ -1690,31 +1670,18 @@ export class SalesService {
       shippingCost: parseFloat(cart.shippingCost.toString()) || 0,
       transportadora: 'interrapidisimo', // Default
       bankCode,
-      couponCode: undefined // Los carritos no manejan cupones por ahora
+      couponCode: undefined, // Los carritos no manejan cupones por ahora
+      cartId: cartId // Agregar cartId para tracking
     };
 
     try {
-      // Crear la venta
+      // Crear la venta (el carrito se marcará como COMPLETED cuando el pago sea exitoso)
       const saleResult = await this.createSale(saleData);
-      
-      // Marcar carrito como completado
-      await this.cartRepository.update(cartId, { status: CartStatus.COMPLETED });
       
       return saleResult;
     } catch (error) {
       console.error(`Error creando venta desde carrito ${cartId}:`, error.message);
       throw error;
-    }
-  }
-
-  private verifyCartToken(cartId: number, token: string): boolean {
-    try {
-      const decoded = Buffer.from(token, 'base64').toString('ascii');
-      const [tokenCartId, hash] = decoded.split(':');
-      
-      return parseInt(tokenCartId) === cartId && hash && hash.length === 64;
-    } catch (error) {
-      return false;
     }
   }
 

@@ -22,6 +22,9 @@ export class Sale {
   @Column('decimal', { precision: 10, scale: 2, default: 0 })
   discountAmount: number;
 
+  @Column({ nullable: true })
+  cartId: number;
+
   @CreateDateColumn()
   createdAt: Date;
 

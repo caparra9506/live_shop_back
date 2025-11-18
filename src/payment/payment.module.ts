@@ -5,12 +5,13 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { StoreConfig } from 'src/entity/store-config.entity';
 import { Store } from 'src/entity/store.entity';
 import { Payment } from 'src/entity/payment.entity';
+import { Cart } from 'src/entity/cart.entity';
 import { SaleModule } from 'src/sale/sale.module';
 import { ElectronicBillingModule } from '../electronic-billing/electronic-billing.module';
 
 @Module({
   imports: [
-      TypeOrmModule.forFeature([StoreConfig, Store, Payment]),
+      TypeOrmModule.forFeature([StoreConfig, Store, Payment, Cart]),
       SaleModule,
       ElectronicBillingModule
     ],

@@ -214,19 +214,10 @@ export class CartController {
 
   @Get('expired/:cartId')
   async getExpiredCart(
-    @Param('cartId') cartId: number,
-    @Query('token') token: string
+    @Param('cartId') cartId: number
   ) {
     try {
-      if (!token) {
-        return {
-          success: false,
-          message: 'Token de acceso requerido',
-          error: 400
-        };
-      }
-
-      const cart = await this.cartService.getExpiredCartWithToken(cartId, token);
+      const cart = await this.cartService.getExpiredCart(cartId);
       return {
         success: true,
         data: cart
@@ -261,20 +252,11 @@ export class CartController {
 
   @Post('expired/:cartId/checkout')
   async checkoutExpiredCart(
-    @Param('cartId') cartId: number,
-    @Query('token') token: string
+    @Param('cartId') cartId: number
   ) {
     try {
-      if (!token) {
-        return {
-          success: false,
-          message: 'Token de acceso requerido',
-          error: 400
-        };
-      }
-
-      // Verify token and get cart
-      const cart = await this.cartService.getExpiredCartWithToken(cartId, token);
+      // Get expired cart
+      const cart = await this.cartService.getExpiredCart(cartId);
       
       // TODO: Integrate with sale service to create sale from expired cart
       // This should validate stock again and create the sale if everything is OK

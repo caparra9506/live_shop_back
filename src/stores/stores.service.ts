@@ -8,6 +8,7 @@ import {
 } from '@nestjs/common';
 import axios from 'axios';
 import { Store } from 'src/entity/store.entity';
+import { Product } from 'src/entity/product.entity';
 import { CreateStoreDto } from './dto/create-store.dto';
 import { UpdateStoreDto } from './dto/update-store.dto';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -27,6 +28,8 @@ export class StoresService {
     private readonly cityRepository: Repository<City>,
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
+    @InjectRepository(Product)
+    private readonly productRepository: Repository<Product>,
     private readonly cipher: Cipher,
   ) {}
 
@@ -257,11 +260,26 @@ export class StoresService {
   async getStoreWithProducts(storeName: string) {
     const storeData = await this.storesRepository.findOne({
       where: { name: storeName },
-      relations: ['categories', 'categories.products'], // Aseguramos cargar productos dentro de categorías
+      relations: ['categories'], // Solo cargamos categorías primero
     });
 
     if (!storeData) {
       throw new NotFoundException(`La tienda "${storeName}" no fue encontrada`);
+    }
+
+    // Cargar productos manualmente para cada categoría para evitar el @Exclude()
+    if (storeData.categories && storeData.categories.length > 0) {
+      console.log(`🔍 Loading products for ${storeData.categories.length} categories`);
+      for (const category of storeData.categories) {
+        console.log(`🔍 Loading products for category: ${category.name} (ID: ${category.id})`);
+        const products = await this.productRepository.find({
+          where: { category: { id: category.id } },
+          relations: ['variants', 'variants.color', 'variants.size']
+        });
+        console.log(`✅ Found ${products.length} products for category ${category.name}`);
+        // Agregar productos directamente al objeto de categoría
+        (category as any).products = products;
+      }
     }
 
     return storeData;

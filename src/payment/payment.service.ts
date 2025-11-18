@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { StoreConfig } from 'src/entity/store-config.entity';
 import { Store } from 'src/entity/store.entity';
 import { Payment } from 'src/entity/payment.entity';
+import { Cart, CartStatus } from 'src/entity/cart.entity';
 import { Repository } from 'typeorm';
 import Epayco from 'epayco-sdk-node';
 import axios from 'axios';
@@ -20,6 +21,9 @@ export class PaymentService {
 
     @InjectRepository(Payment)
     private readonly paymentRepository: Repository<Payment>,
+
+    @InjectRepository(Cart)
+    private readonly cartRepository: Repository<Cart>,
 
     private readonly salesService: SalesService,
     private readonly electronicBillingService: ElectronicBillingService,
@@ -109,6 +113,16 @@ export class PaymentService {
     if (x_transaction_state === 'Aceptada' && x_response === 'Aceptada') {
       console.log('✅ PAGO EXITOSO - Procediendo con procesos automáticos...');
       
+      // 0. Marcar carrito como COMPLETED si la venta proviene de un carrito
+      if (payment.sale?.cartId) {
+        try {
+          await this.cartRepository.update(payment.sale.cartId, { status: CartStatus.COMPLETED });
+          console.log(`✅ Carrito ${payment.sale.cartId} marcado como COMPLETED por pago exitoso`);
+        } catch (error) {
+          console.error(`⚠️ Error al marcar carrito ${payment.sale.cartId} como COMPLETED:`, error.message);
+        }
+      }
+      
       let electronicInvoiceResult = null;
       let webhookResult = null;
 
@@ -127,7 +141,17 @@ export class PaymentService {
         // No afectar el flujo principal si falla la facturación electrónica
       }
 
-      // 2. Enviar guía al webhook externo
+      // 2. Generar guía de envío (movido desde sale.service.ts)
+      try {
+        console.log('📦 Generando guía de envío después de pago confirmado...');
+        await this.generateShippingLabelAfterPayment(payment);
+        console.log('✅ Guía de envío generada exitosamente');
+      } catch (error) {
+        console.error('❌ ERROR generando guía de envío:', error.message);
+        console.error('Stack trace:', error.stack);
+      }
+
+      // 3. Enviar guía al webhook externo
       try {
         webhookResult = await this.sendShippingGuideWebhook(payment);
         console.log('🚀 Guía enviada exitosamente al webhook externo');
@@ -427,5 +451,52 @@ export class PaymentService {
       
       return { success: false, error: error.message };
     }
+  }
+
+  /**
+   * Genera la guía de envío después de confirmar el pago
+   * (movido desde sale.service.ts para evitar generación prematura)
+   */
+  private async generateShippingLabelAfterPayment(payment: Payment) {
+    console.log('📦 Iniciando generación de guía para pago confirmado:', payment.reference);
+    
+    // Obtener datos necesarios de la venta
+    const sale = payment.sale;
+    const tiktokUser = payment.tiktokUser;
+    const store = payment.store;
+    
+    if (!sale || !tiktokUser || !store) {
+      throw new Error('Datos insuficientes para generar guía de envío');
+    }
+
+    // Obtener configuración de la tienda
+    const storeConfig = await this.configRepository.findOne({
+      where: { store: { id: store.id } },
+    });
+
+    // Usar transportadora por defecto (puede ser configurada desde el frontend)
+    const defaultTransportadora = 'servientrega'; // o la lógica que prefieras
+    console.log('📦 Usando transportadora por defecto:', defaultTransportadora);
+
+    // Buscar el producto principal de la venta
+    if (!sale.saleDetails || sale.saleDetails.length === 0) {
+      throw new Error('No se encontraron detalles de la venta');
+    }
+
+    const firstDetail = sale.saleDetails[0];
+    const product = firstDetail.product;
+
+    if (!product) {
+      throw new Error('No se encontró el producto en los detalles de la venta');
+    }
+
+    // Llamar al método de generación de guía del SalesService
+    return await this.salesService.generateShippingLabel(
+      sale,
+      tiktokUser,
+      product,
+      defaultTransportadora,
+      store,
+    );
   }
 }

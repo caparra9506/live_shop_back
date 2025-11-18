@@ -193,14 +193,12 @@ export class SalesController {
 
   @Post('from-expired-cart')
   async createSaleFromExpiredCart(
-    @Body() body: { cartId: number; bankCode: string; expiredCartToken: string },
-    @Headers('cart-access-token') token: string
+    @Body() body: { cartId: number; bankCode: string }
   ) {
     try {
       const result = await this.salesService.createSaleFromExpiredCart(
         body.cartId, 
-        body.bankCode, 
-        token || body.expiredCartToken
+        body.bankCode
       );
       return {
         success: true,

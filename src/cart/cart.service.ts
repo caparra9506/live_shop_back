@@ -560,6 +560,33 @@ export class CartService {
     return cart;
   }
 
+  async getExpiredCart(cartId: number): Promise<Cart> {
+    const cart = await this.cartRepository.findOne({
+      where: { id: cartId },
+      relations: [
+        'cartItems',
+        'cartItems.product',
+        'cartItems.productVariant',
+        'cartItems.productVariant.color',
+        'cartItems.productVariant.size',
+        'tiktokUser',
+        'tiktokUser.city',
+        'store'
+      ]
+    });
+
+    if (!cart) {
+      throw new HttpException('Carrito no encontrado', HttpStatus.NOT_FOUND);
+    }
+
+    // Verificar que el carrito esté expirado o cancelado
+    if (!['EXPIRED', 'CANCELLED'].includes(cart.status)) {
+      throw new HttpException('Carrito no está disponible para pago', HttpStatus.BAD_REQUEST);
+    }
+
+    return cart;
+  }
+
   // Métodos para gestión de stock
   private async reserveProductStock(productId: number, quantity: number): Promise<void> {
     const product = await this.productRepository.findOne({ where: { id: productId } });
