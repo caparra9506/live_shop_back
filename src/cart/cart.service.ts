@@ -319,19 +319,24 @@ export class CartService {
   }
 
   async getUserActiveCart(userTikTokId: number, storeName: string): Promise<Cart | null> {
+    this.logger.log(`🔍 getUserActiveCart - userTikTokId: ${userTikTokId}, storeName: ${storeName}`);
+
     const store = await this.storeRepository.findOne({
       where: { name: storeName }
     });
 
     if (!store) {
+      this.logger.warn(`⚠️ Store not found: ${storeName}`);
       return null;
     }
 
-    return await this.cartRepository.findOne({
-      where: { 
+    this.logger.log(`✅ Store found: ${store.name} (ID: ${store.id})`);
+
+    const cart = await this.cartRepository.findOne({
+      where: {
         tiktokUser: { id: userTikTokId },
         store: { id: store.id },
-        status: CartStatus.ACTIVE 
+        status: CartStatus.ACTIVE
       },
       relations: [
         'cartItems',
@@ -343,6 +348,28 @@ export class CartService {
         'store'
       ]
     });
+
+    if (cart) {
+      this.logger.log(`✅ Cart found: ID ${cart.id}, Items: ${cart.cartItems?.length || 0}`);
+    } else {
+      this.logger.warn(`⚠️ No ACTIVE cart found for user ${userTikTokId} in store ${store.id}`);
+
+      // Debug: Buscar cualquier carrito del usuario en esa tienda
+      const anyCart = await this.cartRepository.findOne({
+        where: {
+          tiktokUser: { id: userTikTokId },
+          store: { id: store.id }
+        }
+      });
+
+      if (anyCart) {
+        this.logger.warn(`⚠️ Found cart with different status: ${anyCart.status} (ID: ${anyCart.id})`);
+      } else {
+        this.logger.warn(`⚠️ No cart exists for this user and store combination`);
+      }
+    }
+
+    return cart;
   }
 
   async extendCartExpiration(cartId: number, additionalDays: number): Promise<Cart> {
