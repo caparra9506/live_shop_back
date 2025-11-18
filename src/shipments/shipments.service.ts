@@ -7,6 +7,7 @@ import { Store } from 'src/entity/store.entity';
 import { StoreConfig } from 'src/entity/store-config.entity';
 import { TikTokUser } from 'src/entity/user-tiktok.entity';
 import { User } from 'src/entity/user.entity';
+import { Cart } from 'src/entity/cart.entity';
 import { Cipher } from 'src/utils/cipher';
 import { Repository } from 'typeorm';
 
@@ -25,6 +26,9 @@ export class ShipmentsService {
     @InjectRepository(Product)
     private readonly productRepository: Repository<Product>,
 
+    @InjectRepository(Cart)
+    private readonly cartRepository: Repository<Cart>,
+
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
     private readonly cipher: Cipher,
@@ -35,12 +39,15 @@ export class ShipmentsService {
 
   async createShipment(
     userTikTokId: string,
-    productId: string,
-    storeName: string,
+    productId?: string,
+    cartId?: string,
+    storeName?: string,
   ) {
-    console.log('userTikTokId ', userTikTokId);
-    console.log('productId ', productId);
-    console.log('storeName ', storeName);
+    console.log('🚚 === SHIPMENT QUOTE REQUEST ===');
+    console.log('userTikTokId:', userTikTokId);
+    console.log('productId:', productId);
+    console.log('cartId:', cartId);
+    console.log('storeName:', storeName);
 
     const store = await this.storesRepository.findOne({
       where: { name: storeName },
@@ -65,16 +72,76 @@ export class ShipmentsService {
       throw new HttpException('User not found', HttpStatus.NOT_FOUND);
     }
 
-    const product = await this.productRepository.findOne({
-      where: {
-        id: Number(productId),
-      },
-    });
+    // Variables para peso, dimensiones y precio
+    let totalWeight = 0;
+    let totalLength = 0;
+    let totalWidth = 0;
+    let totalHeight = 0;
+    let totalPrice = 0;
 
-    console.log('product ', product);
+    // Modo carrito
+    if (cartId) {
+      console.log('📦 CART MODE - Loading cart items');
+      const cart = await this.cartRepository.findOne({
+        where: { id: Number(cartId) },
+        relations: ['cartItems', 'cartItems.product']
+      });
 
-    if (!product) {
-      throw new HttpException('Product not found', HttpStatus.NOT_FOUND);
+      if (!cart) {
+        throw new HttpException('Cart not found', HttpStatus.NOT_FOUND);
+      }
+
+      if (!cart.cartItems || cart.cartItems.length === 0) {
+        throw new HttpException('Cart is empty', HttpStatus.BAD_REQUEST);
+      }
+
+      console.log(`Found ${cart.cartItems.length} items in cart`);
+
+      // Calcular totales del carrito
+      cart.cartItems.forEach(item => {
+        const product = item.product;
+        const quantity = item.quantity;
+
+        totalWeight += (product.weight || 0) * quantity;
+        totalPrice += parseFloat(item.price.toString()) * quantity;
+
+        // Para dimensiones, usamos el máximo de cada dimensión
+        totalLength = Math.max(totalLength, product.length || 0);
+        totalWidth = Math.max(totalWidth, product.width || 0);
+        totalHeight = Math.max(totalHeight, product.height || 0);
+      });
+
+      console.log('📊 Cart totals:', {
+        weight: totalWeight,
+        length: totalLength,
+        width: totalWidth,
+        height: totalHeight,
+        price: totalPrice
+      });
+
+    } else if (productId) {
+      // Modo producto individual (lógica existente)
+      console.log('📦 PRODUCT MODE - Loading single product');
+      const product = await this.productRepository.findOne({
+        where: {
+          id: Number(productId),
+        },
+      });
+
+      console.log('product ', product);
+
+      if (!product) {
+        throw new HttpException('Product not found', HttpStatus.NOT_FOUND);
+      }
+
+      totalWeight = product.weight || 0;
+      totalLength = product.length || 0;
+      totalWidth = product.width || 0;
+      totalHeight = product.height || 0;
+      totalPrice = parseFloat(product.price.toString());
+
+    } else {
+      throw new HttpException('Either productId or cartId must be provided', HttpStatus.BAD_REQUEST);
     }
 
     const user = await this.userRepository.findOne({
@@ -117,13 +184,13 @@ export class ShipmentsService {
       },
       IdTipoEntrega: 1,
       IdServicio: 2,
-      peso: String(product.weight),
-      largo: String(product.length),
-      ancho: String(product.width),
-      alto: String(product.height),
+      peso: String(totalWeight),
+      largo: String(totalLength),
+      ancho: String(totalWidth),
+      alto: String(totalHeight),
       fecha: getCurrentDate(),
       AplicaContrapago: aplicaContrapago,
-      valorDeclarado: String(product.price),
+      valorDeclarado: String(totalPrice),
       seguro99: seguro99,
       seguro99plus: seguro99plus,
     };

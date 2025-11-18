@@ -22,10 +22,11 @@ export class ShipmentsController {
 
   @Post('shipment-quote')
   async create(@Body() createShipmentDto: CreateShipmentDto) {
-    const { userTikTokId, productId, storeName } = createShipmentDto;
+    const { userTikTokId, productId, cartId, storeName } = createShipmentDto;
     return this.shipmentsService.createShipment(
       userTikTokId,
       productId,
+      cartId,
       storeName,
     );
   }
