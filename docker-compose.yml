@@ -1,0 +1,81 @@
+version: '3.8'
+
+services:
+  # NestJS Application
+  app:
+    build: .
+    container_name: compre_pues_app
+    restart: unless-stopped
+    environment:
+      JWT_SECRET: mySuperSecretKey
+      JWT_EXPIRES_IN: 1h
+      DATABASE_HOST: 31.220.104.180
+      DATABASE_PORT: 3306
+      DATABASE_USER: mysql
+      DATABASE_PASSWORD: compre_pues
+      DATABASE_NAME: compre_pues
+      CRYPTO_KEY: 5169266562614c594f52624658684a56714833535e4a33386b41725967785449
+      CRYPTO_IV: +MbQeShVrf171995
+      ULTRAMSG_INSTANCE: instance109511
+      ULTRAMSG_TOKEN: yw05u8wekllmnfun
+      SHIPPING_TEST: false
+      EMAIL_PRUEBA: prueba2@gmail.com
+      EPAYCO_TEST_MODE: false
+      # ePayco API Keys (Plataforma)
+      EPAYCO_PUBLIC_KEY: 85027b72794691f29245650b29caf2f4
+      EPAYCO_PRIVATE_KEY: c23ac0c0572ad4d85520fb4888d4ec0f
+      EPAYCO_EMAIL: 95camilo.ochoa@gmail.com
+      # Split Payment Configuration  
+      ENABLE_SPLIT_PAYMENT: true
+      EPAYCO_PLATFORM_EMAIL: h42trends@gmail.com
+      EPAYCO_PLATFORM_ID: 1553366
+      EPAYCO_MERCHANT_ID: 877999
+      EPAYCO_SPLIT_RULE_CODE: multiple
+      PLATFORM_COMMISSION_AMOUNT: 1000
+      SPLIT_MINIMUM_AMOUNT: 1000
+      MINIO_ENDPOINT: minio-minio.shblkb.easypanel.host
+      MINIO_PORT: 443
+      MINIO_USE_SSL: true
+      MINIO_ACCESS_KEY: admin
+      MINIO_SECRET_KEY: password
+      N8N_WEBHOOK_URL: https://n8n-n8n.shblkb.easypanel.host/webhook/99b63e0c-4d80-4dff-b2fe-3d5cde91423b
+      WEBHOOK_GUIA_URL: https://n8n-n8n.shblkb.easypanel.host/webhook/57aa930e-f92b-4e53-b56f-aa23fe8ab865
+      RABBITMQ_URL: amqp://guest:guest@n8n-rabbitmq.shblkb.easypanel.host:5672
+      RABBITMQ_HOST: n8n-rabbitmq.shblkb.easypanel.host
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: guest
+      RABBITMQ_PASSWORD: guest
+      RABBITMQ_VHOST: /
+      RABBITMQ_QUEUE_NAME: tiktok_comments_queue
+      RABBITMQ_MESSAGE_TTL: 86400000
+      # Chatwoot Integration
+      CHATWOOT_URL: https://n8n-chatwoot.shblkb.easypanel.host/app/accounts/1/dashboard
+      CHATWOOT_BASE_URL: https://n8n-chatwoot.shblkb.easypanel.host/app/accounts/1
+      # Hugging Face AI Token
+      HUGGINGFACE_TOKEN: ${HUGGINGFACE_TOKEN:-hf_your_token_here}
+      # Tracking Scheduler Configuration
+      TRACKING_API_URL: https://integration1.99envios.app/api/sucursal/rastreo
+      TRACKING_API_TOKEN: your_tracking_api_token_here
+      TRACKING_SCHEDULER_ENABLED: true
+      # TikTok Comments Configuration
+      TIKTOK_TEST_KEYWORD: hola
+      BASE_URL: https://comprepues.com.co/api
+      FRONTEND_URL: https://comprepues.com.co
+      PORT: 3000
+      NODE_ENV: production
+    ports:
+      - "3000:3000"  # Backend accesible en localhost:3000
+    networks:
+      - compre_pues_network
+    volumes:
+      - ./uploads:/app/uploads
+      - ./logs:/app/logs
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      timeout: 10s
+      retries: 3
+      interval: 30s
+
+networks:
+  compre_pues_network:
+    driver: bridge

@@ -1,0 +1,114 @@
+version: '3.8'
+
+services:
+  # RabbitMQ para desarrollo local
+  rabbitmq:
+    image: rabbitmq:3.12-management
+    container_name: compre_pues_rabbitmq_dev
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+      RABBITMQ_DEFAULT_VHOST: /
+    ports:
+      - "5672:5672"   # Puerto AMQP
+      - "15672:15672" # Puerto Management UI
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - compre_pues_network
+    healthcheck:
+      test: rabbitmq-diagnostics -q ping
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # MySQL para desarrollo local (opcional)
+  mysql:
+    image: mysql:8.0
+    container_name: compre_pues_mysql_dev
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: compre_pues
+      MYSQL_USER: mysql
+      MYSQL_PASSWORD: compre_pues
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    networks:
+      - compre_pues_network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      timeout: 20s
+      retries: 10
+
+  # NestJS Application para desarrollo
+  app:
+    build: .
+    container_name: compre_pues_app_dev
+    restart: unless-stopped
+    environment:
+      JWT_SECRET: mySuperSecretKey
+      JWT_EXPIRES_IN: 1h
+      DATABASE_HOST: mysql
+      DATABASE_PORT: 3306
+      DATABASE_USER: mysql
+      DATABASE_PASSWORD: compre_pues
+      DATABASE_NAME: compre_pues
+      CRYPTO_KEY: 5169266562614c594f52624658684a56714833535e4a33386b41725967785449
+      CRYPTO_IV: +MbQeShVrf171995
+      ULTRAMSG_INSTANCE: instance109511
+      ULTRAMSG_TOKEN: yw05u8wekllmnfun
+      SHIPPING_TEST: true
+      EMAIL_PRUEBA: prueba2@gmail.com
+      EPAYCO_TEST_MODE: true
+      EPAYCO_PLATFORM_EMAIL: h42trends@gmail.com
+      EPAYCO_PLATFORM_ID: 1553366
+      EPAYCO_MERCHANT_ID: 877999
+      EPAYCO_SPLIT_RULE_CODE: multiple
+      PLATFORM_COMMISSION_AMOUNT: 1000
+      SPLIT_MINIMUM_AMOUNT: 1000
+      MINIO_ENDPOINT: minio-minio.shblkb.easypanel.host
+      MINIO_PORT: 443
+      MINIO_USE_SSL: true
+      MINIO_ACCESS_KEY: admin
+      MINIO_SECRET_KEY: password
+      N8N_WEBHOOK_URL: https://n8n-n8n.shblkb.easypanel.host/webhook-test/99b63e0c-4d80-4dff-b2fe-3d5cde91423b
+      WEBHOOK_GUIA_URL: https://n8n-n8n.shblkb.easypanel.host/webhook/57aa930e-f92b-4e53-b56f-aa23fe8ab865
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: guest
+      RABBITMQ_PASSWORD: guest
+      RABBITMQ_VHOST: /
+      RABBITMQ_QUEUE_NAME: tiktok_comments_queue
+      BASE_URL: http://localhost:3000
+      FRONTEND_URL: http://localhost:4321
+      PORT: 3000
+      NODE_ENV: development
+    ports:
+      - "3000:3000"
+    networks:
+      - compre_pues_network
+    volumes:
+      - ./uploads:/app/uploads
+      - ./logs:/app/logs
+      - ./src:/app/src  # Hot reload para desarrollo
+    depends_on:
+      - rabbitmq
+      - mysql
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      timeout: 10s
+      retries: 3
+      interval: 30s
+
+volumes:
+  rabbitmq_data:
+  mysql_data:
+
+networks:
+  compre_pues_network:
+    driver: bridge
