@@ -112,16 +112,24 @@ export class CartService {
     // Buscar carrito
     const cart = await this.cartRepository.findOne({
       where: { id: cartId },
-      relations: ['cartItems']
+      relations: ['cartItems', 'cartItems.product', 'cartItems.productVariant']
     });
 
-    if (!cart || cart.status !== CartStatus.ACTIVE) {
-      throw new HttpException('Carrito no válido o inactivo', HttpStatus.BAD_REQUEST);
+    if (!cart) {
+      throw new HttpException('Carrito no encontrado', HttpStatus.NOT_FOUND);
     }
 
-    // Verificar si el carrito ha expirado
-    if (new Date() > cart.expiresAt) {
-      throw new HttpException('El carrito ha expirado', HttpStatus.BAD_REQUEST);
+    if (cart.status !== CartStatus.ACTIVE && cart.status !== CartStatus.EXPIRED) {
+      throw new HttpException('Carrito no válido o ya procesado', HttpStatus.BAD_REQUEST);
+    }
+
+    // Si el carrito ha expirado pero está siendo usado, reactivarlo
+    if (cart.status === CartStatus.EXPIRED || new Date() > cart.expiresAt) {
+      this.logger.log(`Reactivando carrito expirado ${cart.id}`);
+      cart.status = CartStatus.ACTIVE;
+      // Extender tiempo por 48 horas más
+      cart.expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000);
+      await this.cartRepository.save(cart);
     }
 
     // Buscar producto
