@@ -96,6 +96,7 @@ export class SalesService {
       shippingCost,
       transportadora,
       bankCode,
+      cartId,
     } = dto;
 
     const store = await this.storeRepository.findOne({
@@ -607,6 +608,17 @@ export class SalesService {
     console.log('📤 Response:', JSON.stringify(response, null, 2));
     console.log('🔗 urlBanco a devolver:', epaycoRes.data?.urlbanco);
     console.log('🎯 === FIN RESPUESTA ===');
+
+    // Si la venta fue creada desde un carrito, marcarlo como COMPLETED
+    if (cartId) {
+      try {
+        await this.cartRepository.update(cartId, { status: CartStatus.COMPLETED });
+        console.log(`✅ Carrito ${cartId} marcado como COMPLETED`);
+      } catch (error) {
+        console.error(`⚠️ Error al marcar carrito ${cartId} como COMPLETED:`, error.message);
+        // No lanzamos error para no bloquear la venta
+      }
+    }
 
     return response;
   }
@@ -1163,6 +1175,9 @@ export class SalesService {
       .innerJoinAndSelect('store.owner', 'owner')
       .leftJoinAndSelect('cart.cartItems', 'items')
       .leftJoinAndSelect('items.product', 'product')
+      .leftJoinAndSelect('items.productVariant', 'variant')
+      .leftJoinAndSelect('variant.color', 'color')
+      .leftJoinAndSelect('variant.size', 'size')
       .leftJoinAndSelect('cart.tiktokUser', 'tiktokUser')
       .leftJoinAndSelect('tiktokUser.city', 'city')
       .where('owner.id = :userId', { userId })

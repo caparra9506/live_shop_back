@@ -5,6 +5,7 @@ export class CreateSaleDto {
     couponCode?: string;
     shippingCost: number;
     transportadora: string;
-    bankCode: string; // 👈 agrega esto
+    bankCode: string;
+    cartId?: number; // Opcional - para marcar carrito como COMPLETED
   }
   
